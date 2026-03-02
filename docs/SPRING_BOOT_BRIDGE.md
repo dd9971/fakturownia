@@ -16,6 +16,14 @@ Zmienne środowiskowe:
 mvn spring-boot:run
 ```
 
+
+## Swagger / OpenAPI UI
+Po uruchomieniu aplikacji:
+- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
+- OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+
+Dokumentacja zawiera opisy endpointów, request/response i pola DTO.
+
 ## Endpointy
 
 ### 1) Utworzenie faktury
