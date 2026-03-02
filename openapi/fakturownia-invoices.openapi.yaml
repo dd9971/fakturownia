@@ -1,0 +1,856 @@
+openapi: 3.0.3
+info:
+  title: Fakturownia API (Invoices focus)
+  version: 1.0.0
+  description: |
+    Specyfikacja OpenAPI przygotowana pod generowanie klienta (np. Java) dla
+    najczęściej używanych endpointów fakturowych Fakturowni.
+
+    Zakres obejmuje sekcje z dokumentacji:
+    - parametry listowania,
+    - CRUD faktur,
+    - PDF i wysyłkę e-mail,
+    - operacje na pozycjach (przez update faktury),
+    - statusy i anulowanie,
+    - faktury cykliczne,
+    - załączniki,
+    - wydruk fiskalny,
+    - pola/specyfikację faktur, rodzaje `kind`, kody GTU.
+
+servers:
+  - url: https://{subdomain}.fakturownia.pl
+    description: Środowisko produkcyjne Fakturownia
+    variables:
+      subdomain:
+        default: twojaDomena
+
+security:
+  - apiTokenQuery: []
+
+tags:
+  - name: Invoices
+  - name: Recurrings
+  - name: Attachments
+
+paths:
+  /invoices.json:
+    get:
+      tags: [Invoices]
+      summary: Pobranie listy faktur
+      description: |
+        Obsługuje m.in. przykłady: aktualny miesiąc, z pozycjami, faktury klienta,
+        filtrowanie po `invoice_ids`, `number`, `kind`, `kinds`, sortowanie i paginację.
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PerPage'
+        - $ref: '#/components/parameters/Period'
+        - $ref: '#/components/parameters/DateFrom'
+        - $ref: '#/components/parameters/DateTo'
+        - $ref: '#/components/parameters/IncludePositions'
+        - $ref: '#/components/parameters/Income'
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/InvoiceIds'
+        - $ref: '#/components/parameters/Number'
+        - $ref: '#/components/parameters/Kind'
+        - $ref: '#/components/parameters/Kinds'
+        - $ref: '#/components/parameters/SearchDateType'
+        - $ref: '#/components/parameters/Order'
+      responses:
+        '200':
+          description: Lista faktur
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+    post:
+      tags: [Invoices]
+      summary: Dodanie nowej faktury
+      description: |
+        Jeden endpoint obsługuje także scenariusze:
+        - minimalny payload (ID klienta/produktu/sprzedawcy),
+        - dokument podobny (`copy_invoice_from`),
+        - OSS (`use_oss`, opcjonalnie top-level `identify_oss`),
+        - korekta (`kind=correction`),
+        - kosztowa (`income=no`/`0`),
+        - uwagi domyślne (`fill_default_descriptions`),
+        - cenniki (`use_prices_from_price_lists`, `price_list_id`),
+        - odbiorcy/wystawcy (`recipients`, `issuers`),
+        - łączenie z paragonem (`additional_params=for_receipt`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceCreateRequest'
+      responses:
+        '201':
+          description: Utworzona faktura
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '200':
+          description: Utworzona faktura (wariant odpowiedzi API)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+
+  /invoices/{invoice_id}.json:
+    get:
+      tags: [Invoices]
+      summary: Pobranie faktury po ID
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - $ref: '#/components/parameters/InvoiceIdPath'
+        - $ref: '#/components/parameters/AdditionalFieldsInvoice'
+        - $ref: '#/components/parameters/CorrectionPositions'
+      responses:
+        '200':
+          description: Faktura
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+    put:
+      tags: [Invoices]
+      summary: Aktualizacja faktury (w tym pozycji, odbiorców i wystawców)
+      description: |
+        Endpoint obejmuje:
+        - aktualizację danych faktury,
+        - aktualizację pozycji (po `positions[].id`),
+        - usunięcie pozycji (`positions[]._destroy=1`),
+        - dodanie pozycji,
+        - połączenie faktury z paragonem,
+        - modyfikację pola `show_attachments`,
+        - edycję/usuwanie `recipients` i `issuers`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceUpdateRequest'
+      responses:
+        '200':
+          description: Zaktualizowana faktura
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+    delete:
+      tags: [Invoices]
+      summary: Usunięcie faktury
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - $ref: '#/components/parameters/InvoiceIdPath'
+      responses:
+        '200':
+          description: Faktura usunięta
+        '204':
+          description: Faktura usunięta (brak treści)
+
+  /invoices/{invoice_id}.pdf:
+    get:
+      tags: [Invoices]
+      summary: Pobranie PDF-a faktury
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - $ref: '#/components/parameters/InvoiceIdPath'
+        - $ref: '#/components/parameters/PrintOption'
+      responses:
+        '200':
+          description: Plik PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /invoices/{invoice_id}/send_by_email.json:
+    post:
+      tags: [Invoices]
+      summary: Wysłanie faktury e-mailem
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - $ref: '#/components/parameters/InvoiceIdPath'
+        - $ref: '#/components/parameters/EmailTo'
+        - $ref: '#/components/parameters/EmailCc'
+        - $ref: '#/components/parameters/EmailPdf'
+        - $ref: '#/components/parameters/UpdateBuyerEmail'
+        - $ref: '#/components/parameters/PrintOption'
+      responses:
+        '200':
+          description: Wysłano e-mail
+
+  /invoices/{invoice_id}/change_status.json:
+    post:
+      tags: [Invoices]
+      summary: Zmiana statusu faktury
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - $ref: '#/components/parameters/InvoiceIdPath'
+        - $ref: '#/components/parameters/Status'
+      responses:
+        '200':
+          description: Status zmieniony
+
+  /invoices/cancel.json:
+    post:
+      tags: [Invoices]
+      summary: Anulowanie faktury
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelInvoiceRequest'
+      responses:
+        '200':
+          description: Faktura anulowana
+
+  /invoices/fiscal_print:
+    get:
+      tags: [Invoices]
+      summary: Wydruk fiskalny
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - name: invoice_ids[]
+          in: query
+          required: true
+          schema:
+            type: array
+            items:
+              type: integer
+          style: form
+          explode: true
+        - name: fiskator_name
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Zlecenie wydruku fiskalnego przyjęte
+
+  /recurrings.json:
+    get:
+      tags: [Recurrings]
+      summary: Pobranie listy definicji faktur cyklicznych
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+      responses:
+        '200':
+          description: Lista definicji cyklicznych
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Recurring'
+    post:
+      tags: [Recurrings]
+      summary: Dodanie definicji faktury cyklicznej
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringCreateRequest'
+      responses:
+        '201':
+          description: Utworzona definicja cykliczna
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recurring'
+        '200':
+          description: Utworzona definicja cykliczna (wariant odpowiedzi API)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recurring'
+
+  /recurrings/{recurring_id}.json:
+    put:
+      tags: [Recurrings]
+      summary: Aktualizacja definicji faktury cyklicznej
+      parameters:
+        - $ref: '#/components/parameters/RecurringIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecurringUpdateRequest'
+      responses:
+        '200':
+          description: Zaktualizowana definicja cykliczna
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recurring'
+
+  /invoices/{invoice_id}/attachments_zip.json:
+    get:
+      tags: [Attachments]
+      summary: Pobranie załączników faktury jako ZIP
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - $ref: '#/components/parameters/InvoiceIdPath'
+      responses:
+        '200':
+          description: Archiwum ZIP
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+
+  /invoices/{invoice_id}/get_new_attachment_credentials.json:
+    get:
+      tags: [Attachments]
+      summary: Pobranie danych do uploadu załącznika
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - $ref: '#/components/parameters/InvoiceIdPath'
+      responses:
+        '200':
+          description: Dane uwierzytelniające do wysłania pliku
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentCredentials'
+
+  /invoices/{invoice_id}/add_attachment.json:
+    post:
+      tags: [Attachments]
+      summary: Dodanie przesłanego załącznika do faktury
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - $ref: '#/components/parameters/InvoiceIdPath'
+        - name: file_name
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Załącznik dodany
+
+components:
+  securitySchemes:
+    apiTokenQuery:
+      type: apiKey
+      in: query
+      name: api_token
+
+  parameters:
+    ApiToken:
+      name: api_token
+      in: query
+      required: true
+      schema:
+        type: string
+
+    InvoiceIdPath:
+      name: invoice_id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+    RecurringIdPath:
+      name: recurring_id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    PerPage:
+      name: per_page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+
+    Period:
+      name: period
+      in: query
+      schema:
+        type: string
+        enum: [last_12_months, this_month, last_30_days, last_month, this_year, last_year, all, more]
+
+    DateFrom:
+      name: date_from
+      in: query
+      schema:
+        type: string
+        format: date
+
+    DateTo:
+      name: date_to
+      in: query
+      schema:
+        type: string
+        format: date
+
+    IncludePositions:
+      name: include_positions
+      in: query
+      schema:
+        type: boolean
+
+    Income:
+      name: income
+      in: query
+      schema:
+        type: string
+        enum: ['1', '0', 'yes', 'no']
+
+    ClientId:
+      name: client_id
+      in: query
+      schema:
+        type: integer
+
+    InvoiceIds:
+      name: invoice_ids
+      in: query
+      schema:
+        type: string
+      description: Lista ID rozdzielona przecinkami, np. `123,456,789`.
+
+    Number:
+      name: number
+      in: query
+      schema:
+        type: string
+
+    Kind:
+      name: kind
+      in: query
+      schema:
+        $ref: '#/components/schemas/InvoiceKind'
+
+    Kinds:
+      name: kinds[]
+      in: query
+      schema:
+        type: array
+        items:
+          $ref: '#/components/schemas/InvoiceKind'
+      style: form
+      explode: true
+
+    SearchDateType:
+      name: search_date_type
+      in: query
+      schema:
+        type: string
+        enum: [issue_date, paid_date, transaction_date]
+
+    Order:
+      name: order
+      in: query
+      schema:
+        type: string
+        description: np. `updated_at` albo `updated_at.desc`.
+
+    AdditionalFieldsInvoice:
+      name: additional_fields[invoice]
+      in: query
+      schema:
+        type: string
+      description: np. `connected_payments`, `cancel_reason`, `corrected_content_before,corrected_content_after`.
+
+    CorrectionPositions:
+      name: correction_positions
+      in: query
+      schema:
+        type: string
+        enum: [full]
+
+    PrintOption:
+      name: print_option
+      in: query
+      schema:
+        type: string
+        enum: [original, copy, original_and_copy, duplicate]
+
+    EmailTo:
+      name: email_to
+      in: query
+      schema:
+        type: string
+      description: Lista adresów rozdzielona przecinkami (do 5).
+
+    EmailCc:
+      name: email_cc
+      in: query
+      schema:
+        type: string
+
+    EmailPdf:
+      name: email_pdf
+      in: query
+      schema:
+        type: boolean
+
+    UpdateBuyerEmail:
+      name: update_buyer_email
+      in: query
+      schema:
+        type: boolean
+
+    Status:
+      name: status
+      in: query
+      required: true
+      schema:
+        type: string
+        enum: [issued, sent, paid, partial, rejected]
+
+  schemas:
+    InvoiceKind:
+      type: string
+      enum:
+        - vat
+        - proforma
+        - bill
+        - receipt
+        - advance
+        - final
+        - correction
+        - invoice_other
+        - vat_margin
+        - kp
+        - kw
+        - estimate
+        - vat_mp
+        - vat_rr
+        - correction_note
+        - accounting_note
+        - client_order
+        - dw
+        - wnt
+        - wdt
+        - import_service
+        - import_service_eu
+        - import_products
+        - export_products
+
+    GtuCode:
+      type: string
+      enum:
+        - GTU_01
+        - GTU_02
+        - GTU_03
+        - GTU_04
+        - GTU_05
+        - GTU_06
+        - GTU_07
+        - GTU_08
+        - GTU_09
+        - GTU_10
+        - GTU_11
+        - GTU_12
+        - GTU_13
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        number:
+          type: string
+        kind:
+          $ref: '#/components/schemas/InvoiceKind'
+        issue_date:
+          type: string
+          format: date
+        sell_date:
+          type: string
+        payment_to:
+          type: string
+          format: date
+        status:
+          type: string
+        income:
+          type: string
+          enum: ['1', '0']
+        client_id:
+          type: integer
+        buyer_name:
+          type: string
+        buyer_tax_no:
+          type: string
+        seller_name:
+          type: string
+        seller_tax_no:
+          type: string
+        connected_payments:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        recipients:
+          type: array
+          items:
+            $ref: '#/components/schemas/Party'
+        issuers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Party'
+        positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoicePosition'
+      additionalProperties: true
+
+    InvoicePosition:
+      type: object
+      properties:
+        id:
+          type: integer
+        product_id:
+          type: integer
+        name:
+          type: string
+        quantity:
+          type: number
+        tax:
+          type: string
+        total_price_gross:
+          oneOf:
+            - type: number
+            - type: string
+        gtu_code:
+          $ref: '#/components/schemas/GtuCode'
+        _destroy:
+          type: integer
+          enum: [1]
+      additionalProperties: true
+
+    Party:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        company:
+          oneOf:
+            - type: string
+            - type: boolean
+        email:
+          type: string
+          format: email
+        _destroy:
+          type: integer
+          enum: [1]
+      additionalProperties: true
+
+    InvoicePayload:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/InvoiceKind'
+        number:
+          type: string
+          nullable: true
+        issue_date:
+          type: string
+          format: date
+        sell_date:
+          type: string
+        payment_to_kind:
+          oneOf:
+            - type: integer
+            - type: string
+        payment_to:
+          type: string
+          format: date
+        client_id:
+          type: integer
+        department_id:
+          type: integer
+        recipient_id:
+          type: integer
+        copy_invoice_from:
+          type: integer
+        invoice_ids:
+          type: array
+          items:
+            type: integer
+        additional_params:
+          type: string
+        income:
+          oneOf:
+            - type: string
+            - type: integer
+        use_oss:
+          type: boolean
+        use_prices_from_price_lists:
+          type: boolean
+        price_list_id:
+          type: integer
+        fill_default_descriptions:
+          type: boolean
+        show_attachments:
+          type: boolean
+        correction_reason:
+          type: string
+        invoice_id:
+          oneOf:
+            - type: integer
+            - type: string
+        from_invoice_id:
+          oneOf:
+            - type: integer
+            - type: string
+        buyer_email:
+          type: string
+        recipients:
+          type: array
+          items:
+            $ref: '#/components/schemas/Party'
+        issuers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Party'
+        positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoicePosition'
+      additionalProperties: true
+
+    InvoiceCreateRequest:
+      type: object
+      required: [api_token, invoice]
+      properties:
+        api_token:
+          type: string
+        identify_oss:
+          type: string
+          enum: ['1']
+        fill_default_descriptions:
+          type: boolean
+        invoice:
+          $ref: '#/components/schemas/InvoicePayload'
+
+    InvoiceUpdateRequest:
+      type: object
+      required: [api_token, invoice]
+      properties:
+        api_token:
+          type: string
+        invoice:
+          $ref: '#/components/schemas/InvoicePayload'
+
+    CancelInvoiceRequest:
+      type: object
+      required: [api_token, cancel_invoice_id]
+      properties:
+        api_token:
+          type: string
+        cancel_invoice_id:
+          type: integer
+        cancel_reason:
+          type: string
+
+    Recurring:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        invoice_id:
+          type: integer
+        start_date:
+          type: string
+          format: date
+        next_invoice_date:
+          type: string
+          format: date
+        every:
+          type: string
+        send_email:
+          type: boolean
+      additionalProperties: true
+
+    RecurringCreateRequest:
+      type: object
+      required: [api_token, recurring]
+      properties:
+        api_token:
+          type: string
+        recurring:
+          type: object
+          required: [name, invoice_id, start_date, every]
+          properties:
+            name:
+              type: string
+            invoice_id:
+              type: integer
+            start_date:
+              type: string
+              format: date
+            every:
+              type: string
+              example: 1m
+            issue_working_day_only:
+              type: boolean
+            send_email:
+              type: boolean
+            buyer_email:
+              type: string
+            end_date:
+              type: string
+              nullable: true
+          additionalProperties: true
+
+    RecurringUpdateRequest:
+      type: object
+      required: [api_token, recurring]
+      properties:
+        api_token:
+          type: string
+        recurring:
+          type: object
+          properties:
+            next_invoice_date:
+              type: string
+              format: date
+          additionalProperties: true
+
+    AttachmentCredentials:
+      type: object
+      properties:
+        AWSAccessKeyId:
+          type: string
+        key:
+          type: string
+        policy:
+          type: string
+        signature:
+          type: string
+        acl:
+          type: string
+        success_action_status:
+          type: string
+        url:
+          type: string
+          format: uri
+      additionalProperties: true
