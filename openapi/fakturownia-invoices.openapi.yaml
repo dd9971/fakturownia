@@ -151,6 +151,8 @@ paths:
                 "$ref": "#/components/schemas/ErrorResponse"
       operationId: createInvoice
   "/invoices/{invoice_id}.json":
+    parameters:
+    - "$ref": "#/components/parameters/InvoiceIdPath"
     get:
       tags:
       - Invoices
