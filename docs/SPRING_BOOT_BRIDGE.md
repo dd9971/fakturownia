@@ -61,3 +61,13 @@ Przykładowe body:
 ```
 
 > `ksefInvoiceId` i `ksefStatus` mogą być `null`, jeśli faktura nie została jeszcze wysłana/przetworzona w KSeF.
+
+
+## Testy (Spock + Groovy)
+Testy kontrolera znajdują się w:
+- `src/test/groovy/pl/fakturownia/bridge/api/InvoiceControllerIntegrationSpec.groovy`
+
+Uruchamianie:
+```bash
+mvn test
+```
