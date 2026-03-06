@@ -1,0 +1,297 @@
+openapi: 3.0.3
+info:
+  title: Fakturownia API - minimal invoices scope
+  version: 2.0.0
+  description: |
+    Minimalna specyfikacja OpenAPI do trzech operacji:
+    1) tworzenie faktury,
+    2) pobranie statusu faktury (w tym pól KSeF z odpowiedzi),
+    3) pobranie PDF faktury.
+servers:
+  - url: https://{subdomain}.fakturownia.pl
+    variables:
+      subdomain:
+        default: twojaDomena
+security:
+  - apiTokenQuery: []
+
+tags:
+  - name: Invoices
+
+paths:
+  /invoices.json:
+    post:
+      tags: [Invoices]
+      operationId: createInvoice
+      summary: Dodanie nowej faktury
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceCreateRequest'
+      responses:
+        '201':
+          description: Utworzona faktura
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '200':
+          description: Utworzona faktura (wariant odpowiedzi API)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '400':
+          description: Nieprawidłowe żądanie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Brak autoryzacji
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Błąd walidacji
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /invoices/{invoice_id}.json:
+    parameters:
+      - $ref: '#/components/parameters/InvoiceIdPath'
+    get:
+      tags: [Invoices]
+      operationId: getInvoiceById
+      summary: Pobranie faktury po ID (status + pola KSeF)
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - $ref: '#/components/parameters/AdditionalFieldsInvoice'
+      responses:
+        '200':
+          description: Faktura
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '400':
+          description: Nieprawidłowe żądanie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Brak autoryzacji
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Nie znaleziono zasobu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /invoices/{invoice_id}.pdf:
+    parameters:
+      - $ref: '#/components/parameters/InvoiceIdPath'
+    get:
+      tags: [Invoices]
+      operationId: downloadInvoicePdf
+      summary: Pobranie PDF faktury
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - $ref: '#/components/parameters/PrintOption'
+      responses:
+        '200':
+          description: Plik PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Nieprawidłowe żądanie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Brak autoryzacji
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Nie znaleziono zasobu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    apiTokenQuery:
+      type: apiKey
+      in: query
+      name: api_token
+
+  parameters:
+    ApiToken:
+      name: api_token
+      in: query
+      required: true
+      schema:
+        type: string
+
+    InvoiceIdPath:
+      name: invoice_id
+      in: path
+      required: true
+      schema:
+        type: integer
+
+    AdditionalFieldsInvoice:
+      name: additional_fields[invoice]
+      in: query
+      required: false
+      schema:
+        type: string
+      description: |
+        Opcjonalne pola dodatkowe, np. `connected_payments`, `cancel_reason`,
+        `corrected_content_before,corrected_content_after`.
+
+    PrintOption:
+      name: print_option
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [original, copy, original_and_copy, duplicate]
+
+  schemas:
+    Invoice:
+      type: object
+      description: |
+        Model faktury. Poza podstawowymi polami może zwracać także pola KSeF,
+        np. `gov_id`, `gov_status`, `gov_send_date`, `gov_error_messages`.
+      properties:
+        id:
+          type: integer
+        number:
+          type: string
+        kind:
+          type: string
+        status:
+          type: string
+        issue_date:
+          type: string
+          format: date
+        sell_date:
+          type: string
+        payment_to:
+          type: string
+          format: date
+        seller_name:
+          type: string
+        seller_tax_no:
+          type: string
+        buyer_name:
+          type: string
+        buyer_tax_no:
+          type: string
+        gov_id:
+          type: string
+          nullable: true
+        gov_status:
+          type: string
+          nullable: true
+      additionalProperties: true
+
+    InvoicePosition:
+      type: object
+      properties:
+        name:
+          type: string
+        quantity:
+          type: number
+        tax:
+          oneOf:
+            - type: number
+            - type: string
+        total_price_gross:
+          oneOf:
+            - type: number
+            - type: string
+      additionalProperties: true
+
+    InvoicePayload:
+      type: object
+      required:
+        - positions
+      properties:
+        kind:
+          type: string
+          example: vat
+        issue_date:
+          type: string
+          format: date
+        sell_date:
+          type: string
+        payment_to:
+          type: string
+          format: date
+        payment_to_kind:
+          oneOf:
+            - type: integer
+            - type: string
+        seller_name:
+          type: string
+        seller_tax_no:
+          type: string
+        buyer_name:
+          type: string
+        buyer_tax_no:
+          type: string
+        client_id:
+          type: integer
+        department_id:
+          type: integer
+        positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoicePosition'
+      additionalProperties: true
+
+    InvoiceCreateRequest:
+      type: object
+      required:
+        - api_token
+        - invoice
+      properties:
+        api_token:
+          type: string
+        gov_save_and_send:
+          type: boolean
+          description: Zapisz i wyślij do KSeF.
+        invoice:
+          $ref: '#/components/schemas/InvoicePayload'
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: string
+      additionalProperties: true

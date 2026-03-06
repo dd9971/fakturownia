@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: fakturownia-bridge
+
+fakturownia:
+  base-url: ${FAKTUROWNIA_BASE_URL:https://twojaDomena.fakturownia.pl}
+  api-token: ${FAKTUROWNIA_API_TOKEN:API_TOKEN}
