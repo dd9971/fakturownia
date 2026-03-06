@@ -14,6 +14,8 @@ import static org.mockito.ArgumentMatchers.any
 import static org.mockito.BDDMockito.given
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 
@@ -72,6 +74,19 @@ class InvoiceControllerIntegrationSpec extends Specification {
                 .andExpect(jsonPath('$.ksefInvoiceId').value("KSEF-XYZ-999"))
                 .andExpect(jsonPath('$.invoiceStatus').value("paid"))
                 .andExpect(jsonPath('$.ksefStatus').value("processing"))
+    }
+
+    def "should return invoice pdf"() {
+        given:
+        byte[] pdfContent = "%PDF-1.4 sample".getBytes("UTF-8")
+        given(invoiceService.getInvoicePdf(123L)).willReturn(pdfContent)
+
+        expect:
+        mockMvc.perform(get("/api/invoices/123/pdf"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_PDF))
+                .andExpect(header().string("Content-Disposition", "inline; filename=invoice-123.pdf"))
+                .andExpect(content().bytes(pdfContent))
     }
 
     def "should return 400 for invalid create request payload"() {

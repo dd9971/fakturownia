@@ -7,7 +7,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -54,5 +57,20 @@ public class InvoiceController {
     })
     public InvoiceStatusResponse getInvoiceStatus(@PathVariable Long invoiceId) {
         return invoiceService.getInvoiceStatus(invoiceId);
+    }
+
+    @GetMapping(value = "/{invoiceId}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    @Operation(summary = "Pobranie PDF faktury",
+            description = "Pobiera PDF faktury z Fakturowni i zwraca go jako plik application/pdf.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "PDF pobrany"),
+            @ApiResponse(responseCode = "502", description = "Błąd komunikacji z API Fakturownia")
+    })
+    public ResponseEntity<byte[]> getInvoicePdf(@PathVariable Long invoiceId) {
+        byte[] pdf = invoiceService.getInvoicePdf(invoiceId);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=invoice-" + invoiceId + ".pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 }

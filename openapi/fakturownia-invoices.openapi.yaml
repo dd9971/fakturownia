@@ -3,9 +3,10 @@ info:
   title: Fakturownia API - minimal invoices scope
   version: 2.0.0
   description: |
-    Minimalna specyfikacja OpenAPI do dwóch operacji:
+    Minimalna specyfikacja OpenAPI do trzech operacji:
     1) tworzenie faktury,
-    2) pobranie statusu faktury (w tym pól KSeF z odpowiedzi).
+    2) pobranie statusu faktury (w tym pól KSeF z odpowiedzi),
+    3) pobranie PDF faktury.
 servers:
   - url: https://{subdomain}.fakturownia.pl
     variables:
@@ -97,6 +98,43 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /invoices/{invoice_id}.pdf:
+    parameters:
+      - $ref: '#/components/parameters/InvoiceIdPath'
+    get:
+      tags: [Invoices]
+      operationId: downloadInvoicePdf
+      summary: Pobranie PDF faktury
+      parameters:
+        - $ref: '#/components/parameters/ApiToken'
+        - $ref: '#/components/parameters/PrintOption'
+      responses:
+        '200':
+          description: Plik PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Nieprawidłowe żądanie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Brak autoryzacji
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Nie znaleziono zasobu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     apiTokenQuery:
@@ -128,6 +166,14 @@ components:
       description: |
         Opcjonalne pola dodatkowe, np. `connected_payments`, `cancel_reason`,
         `corrected_content_before,corrected_content_after`.
+
+    PrintOption:
+      name: print_option
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [original, copy, original_and_copy, duplicate]
 
   schemas:
     Invoice:

@@ -50,6 +50,9 @@ Przykładowe body:
 ### 2) Status faktury + status KSeF
 `GET /api/invoices/{invoiceId}/status`
 
+### 3) Pobranie faktury PDF
+`GET /api/invoices/{invoiceId}/pdf`
+
 ## Wspólny format odpowiedzi
 ```json
 {

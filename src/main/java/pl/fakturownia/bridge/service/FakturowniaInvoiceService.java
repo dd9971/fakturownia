@@ -32,7 +32,7 @@ public class FakturowniaInvoiceService {
 
     public InvoiceStatusResponse createInvoice(CreateInvoiceRequest request) {
         InvoicePayload payload = new InvoicePayload();
-        payload.setKind(InvoicePayload.KindEnum.VAT);
+        payload.setKind("vat");
         payload.setIssueDate(LocalDate.now());
         payload.setSellDate(LocalDate.now().toString());
         payload.setPaymentTo(LocalDate.now().plusDays(7));
@@ -55,15 +55,19 @@ public class FakturowniaInvoiceService {
     }
 
     public InvoiceStatusResponse getInvoiceStatus(Long invoiceId) {
-        Invoice invoice = invoicesApi.getInvoiceById(properties.apiToken(), invoiceId, null, null);
+        Invoice invoice = invoicesApi.getInvoiceById(properties.apiToken(), invoiceId, null);
         return toStatusResponse(invoice);
+    }
+
+    public byte[] getInvoicePdf(Long invoiceId) {
+        return invoicesApi.downloadInvoicePdf(properties.apiToken(), invoiceId, null);
     }
 
     private InvoicePosition mapPosition(CreateInvoiceRequest.Position position) {
         InvoicePosition mapped = new InvoicePosition();
         mapped.setName(position.name());
         mapped.setQuantity(position.quantity());
-        mapped.setTax(position.tax());
+        mapped.setTax(String.valueOf(position.tax()));
         mapped.setTotalPriceGross(position.totalPriceGross().setScale(2, RoundingMode.HALF_UP).toPlainString());
         return mapped;
     }
